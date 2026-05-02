@@ -119,6 +119,11 @@ def buscar_usuario_por_arg(arg):
         if arg.startswith("@"):
             username = arg.replace("@", "").lower()
             cursor.execute("SELECT id, name, username, credits FROM users WHERE lower(username)=?", (username,))
+            res = cursor.fetchone()
+            if not res and username.isdigit():
+                cursor.execute("SELECT id, name, username, credits FROM users WHERE id=?", (username,))
+                res = cursor.fetchone()
+            return res
         else:
             cursor.execute("SELECT id, name, username, credits FROM users WHERE id=?", (arg,))
         return cursor.fetchone()
@@ -576,6 +581,10 @@ async def historia(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Comando no reconocido. Usa /cmds")
 
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Si le hablan normal, le mostramos los comandos
+    await cmds(update, context)
+
 # ================= MAIN =================
 def main():
     if not TOKEN: return print("❌ Configura TELEGRAM_BOT_TOKEN en el archivo .env")
@@ -610,6 +619,7 @@ def main():
     app.add_handler(CommandHandler("ban", ban))
     app.add_handler(CommandHandler("unban", unban))
 
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
     app.add_error_handler(error_handler)
 
