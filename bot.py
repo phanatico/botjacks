@@ -113,19 +113,14 @@ def gen_id():
     return str(random.randint(100000, 999999))
 
 def buscar_usuario_por_arg(arg):
-    arg = arg.strip()
+    arg = str(arg).strip()
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        if arg.startswith("@"):
-            username = arg.replace("@", "").lower()
-            cursor.execute("SELECT id, name, username, credits FROM users WHERE lower(username)=?", (username,))
-            res = cursor.fetchone()
-            if not res and username.isdigit():
-                cursor.execute("SELECT id, name, username, credits FROM users WHERE id=?", (username,))
-                res = cursor.fetchone()
-            return res
-        else:
-            cursor.execute("SELECT id, name, username, credits FROM users WHERE id=?", (arg,))
+        cursor.execute("SELECT id, name, username, credits FROM users WHERE id=?", (arg.replace("@", ""),))
+        res = cursor.fetchone()
+        if res: return res
+        clean_user = arg.replace("@", "").lower()
+        cursor.execute("SELECT id, name, username, credits FROM users WHERE lower(username)=? OR lower(username)=?", (clean_user, "@" + clean_user))
         return cursor.fetchone()
 
 def is_user_banned(uid):
@@ -374,6 +369,18 @@ async def admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, parse_mode=ParseMode.HTML)
 
 # ================= RESTO DE FUNCIONES ADMIN =================
+async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return await update.message.reply_text("❌ No tienes permisos.")
+    with get_db_connection() as conn:
+        users = conn.execute("SELECT id, username, credits FROM users").fetchall()
+    if not users: return await update.message.reply_text("No hay usuarios registrados.")
+    
+    texto = f"👥 <b>LISTA DE USUARIOS ({len(users)})</b>\n\n"
+    for u in users:
+        texto += f"ID: <code>{u[0]}</code> | {u[1]} | 💰 {u[2]}\n"
+    for i in range(0, len(texto), 4000):
+        await update.message.reply_text(texto[i:i+4000], parse_mode=ParseMode.HTML)
+
 async def stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     partes = update.message.text.split(maxsplit=1)
@@ -605,6 +612,7 @@ def main():
     app.add_handler(CommandHandler("addadmin", addadmin))
     app.add_handler(CommandHandler("deladmin", deladmin))
     app.add_handler(CommandHandler("admins", admins))
+    app.add_handler(CommandHandler("users", users_list))
 
     app.add_handler(CommandHandler("stock", stock))
     app.add_handler(CommandHandler("resetstock", resetstock))
